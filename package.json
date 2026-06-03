@@ -1,8 +1,8 @@
 {
-  "name": "zoho-inventory-clone",
+  "name": "khmer-sme-stack",
   "version": "1.0.0",
   "private": true,
-  "description": "A full-featured inventory management system inspired by Zoho Inventory",
+  "description": "Open-source back-office stack for Cambodian SMEs. First piece: Stockly, an inventory and order management app.",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "prisma generate && next build",

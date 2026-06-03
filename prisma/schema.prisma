@@ -1,6 +1,6 @@
-// Zoho Inventory Clone - Prisma Schema
-// Models an inventory management SaaS with multi-warehouse,
-// multi-currency, sales/purchases, shipments, and reporting.
+// Khmer SME Stack - Stockly inventory module
+// Prisma schema for the first piece of the stack: a multi-warehouse,
+// multi-currency inventory and order management system.
 
 generator client {
   provider = "prisma-client-js"

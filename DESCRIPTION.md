@@ -1,47 +1,43 @@
-## About this project
+# About Khmer SME Stack
 
-**khmer-sme-stack** is a free, open-source starter for building POS, inventory, and e-commerce back-office systems tailored to the realities of running a small business in Cambodia.
+A free, open-source back-office stack for small and medium businesses in Cambodia. The first piece is **Stockly**, a working inventory and order management web app — the kind most small shops, wholesalers, and distributors actually need day-to-day.
 
-It's a working, end-to-end inventory management web app — modeled after Zoho Inventory — that small shop owners, wholesalers, and distributors can actually use today, and that developers can fork and adapt to local needs.
+The codebase is a Next.js 14 + Prisma + SQLite app. The Prisma schema covers the full set of operations a real SME runs: items, warehouses, sales orders, invoices, payments, purchase orders, vendor bills, transfers, picklists, packages, shipments, and reports. Multi-currency is built in (USD, KHR, and 10 others). Auth is JWT. The UI works on phones.
 
-### Why this exists
+The point isn't to ship the most polished SaaS in the world. The point is to give Cambodian developers and small business owners a real starting point they own, instead of paying $29–$249/month for a foreign product that doesn't speak the local context.
 
-Cambodian SMEs still run their businesses on:
-- paper ledgers and Excel sheets that break as soon as there are more than 50 SKUs
-- expensive foreign SaaS priced in USD with no local payment support
-- WhatsApp groups and "do you have stock?" phone calls
+## Why this exists
 
-This project gives you a foundation to fix that. It's not a finished product — it's a working **starting point** you can fork, translate, and extend.
+Most Cambodian SMEs run on paper, WhatsApp, and Excel. That works until it doesn't — usually around the time you have more than a couple dozen SKUs, more than one person touching the data, or a customer asking why their order is late.
 
-### What's included (out of the box)
+The commercial options aren't great. Foreign SaaS is priced in USD with no local payment support, holds your data on someone else's servers, and charges per user. Local off-the-shelf software tends to be expensive desktop apps from the early 2000s.
 
-- Multi-warehouse stock tracking
-- Sales orders, invoices, and customer payments
-- Purchase orders, bills, and vendor payments
-- Packages and shipments
-- Picklists and inventory adjustments
-- Inter-warehouse transfer orders
-- Composite items (kits/bundles)
-- Multi-currency support (USD, KHR, EUR, JPY, and 8 more)
+This is a third path: an MIT-licensed codebase you can run on a $5 VPS, modify freely, and grow into the specific business you have.
+
+## What's in the first release (Stockly)
+
+- Items, categories, barcodes (UPC/EAN/ISBN), composite bundles, reorder points
+- Multi-warehouse stock with per-location quantities
+- Sales orders → invoices → customer payments (atomic balance updates)
+- Purchase orders → vendor bills → vendor payments
+- Inter-warehouse transfer orders (atomic stock moves)
+- Inventory adjustments (positive/negative per warehouse)
+- Picklists with per-line picked status
+- Packages and outbound shipments with carrier + tracking
+- Multi-currency transactions
 - Tax configuration
 - Price lists
-- Reports (sales by customer/item, inventory valuation, low stock, vendor spend, customer aging)
-- JWT auth, role-based organization model
-- Clean, modern, mobile-friendly UI
+- Reports: sales by customer/item, inventory valuation, low stock, vendor spend, customer aging
+- Multi-user, multi-organization data isolation
 
-### Designed for Cambodia
+## Built for the local context
 
-- **Default currency is USD**, with KHR (and others) one switch away in Settings
-- **Offline-tolerant** by design (single SQLite file — drop it on a flash drive, sync later)
-- **Mobile-friendly UI** because the owner is often the one using it from a phone
-- **Ready to extend** with local payment gateways (Wing, ABA Pay, Pi Pay, KHQR), Khmer language translations, and Telegram-bot notifications
+- **USD by default**, KHR (and any other currency) one switch away in Settings
+- **Single SQLite file** — back it up with a cron job and an S3 sync, or just copy it to a flash drive
+- **Mobile-friendly** because the shop owner is usually the one using it from their phone
+- **Designed to extend** with KHQR / ABA Pay / Wing / Pi Pay, Khmer translations, Telegram alerts, and ESC/POS thermal printer support
 
-### Tech stack
-
-Next.js 14 (App Router) · TypeScript · Prisma · SQLite · Tailwind CSS · Recharts · JWT auth
-No vendor lock-in. No telemetry. Runs on a $5/month VPS.
-
-### Quick start
+## Getting started
 
 ```bash
 git clone https://github.com/vengmony/khmer-sme-stack.git
@@ -53,19 +49,18 @@ npm run db:seed
 npm run dev
 ```
 
-Then sign in at `http://localhost:3000` with `demo@stockly.app` / `demo1234`.
+Sign in at `http://localhost:3000` with `demo@stockly.app` / `demo1234`.
 
-### Roadmap (contributions welcome)
+## Roadmap
 
 - [ ] Khmer (ខ្មែរ) UI translation
-- [ ] KHQR / ABA Pay / Wing payment integration
+- [ ] KHQR / ABA Pay / Wing / Pi Pay integration
 - [ ] Telegram bot for order alerts
-- [ ] Receipt printer support (ESC/POS thermal printers)
-- [ ] Mobile-first POS mode for shop counters
+- [ ] ESC/POS thermal printer support
 - [ ] Public storefront (lightweight e-commerce)
 - [ ] Multi-store (one owner, many branches)
-- [ ] Lite mode for very low-bandwidth areas
+- [ ] Offline-first sync mode
 
-### License
+## License
 
-MIT — fork it, sell it, ship it, just keep it open.
+MIT — fork it, run it, sell services around it, just keep the source open.
