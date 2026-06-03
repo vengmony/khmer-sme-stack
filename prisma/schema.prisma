@@ -1,0 +1,750 @@
+// Zoho Inventory Clone - Prisma Schema
+// Models an inventory management SaaS with multi-warehouse,
+// multi-currency, sales/purchases, shipments, and reporting.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// =========================================================================
+// Organization & Users
+// =========================================================================
+model Organization {
+  id              String   @id @default(cuid())
+  name            String
+  email           String?
+  phone           String?
+  website         String?
+  currencyCode    String   @default("USD")
+  currencySymbol  String   @default("$")
+  fiscalYearStart String   @default("January")
+  addressLine1    String?
+  addressLine2    String?
+  city            String?
+  state           String?
+  zip             String?
+  country         String?
+  logoUrl         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users      User[]
+  warehouses Warehouse[]
+  items      Item[]
+  contacts   Contact[]
+  salesOrders      SalesOrder[]
+  purchaseOrders  PurchaseOrder[]
+  invoices    Invoice[]
+  bills       Bill[]
+  customerPayments CustomerPayment[]
+  vendorPayments   VendorPayment[]
+  packages    Package[]
+  shipments   Shipment[]
+  picklists   Picklist[]
+  inventoryAdjustments InventoryAdjustment[]
+  transferOrders TransferOrder[]
+  taxes       Tax[]
+  priceLists  PriceList[]
+  // Settings
+  enableSerialTracking Boolean @default(false)
+  enableBatchTracking  Boolean @default(false)
+  enableMultiCurrency  Boolean @default(true)
+  enableBarcode        Boolean @default(true)
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  name           String
+  role           String   @default("admin") // admin | user
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// =========================================================================
+// Warehouses
+// =========================================================================
+model Warehouse {
+  id             String   @id @default(cuid())
+  name           String
+  code           String?
+  addressLine1   String?
+  addressLine2   String?
+  city           String?
+  state          String?
+  zip            String?
+  country        String?
+  isDefault      Boolean  @default(false)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  stockLevels          StockLevel[]
+  transferOrdersFrom   TransferOrder[] @relation("TransferFrom")
+  transferOrdersTo     TransferOrder[] @relation("TransferTo")
+  picklists            Picklist[]
+  inventoryAdjustments InventoryAdjustment[]
+  salesOrderShipments  SalesOrder[]
+  purchaseOrderReceives PurchaseOrder[]
+}
+
+// =========================================================================
+// Items / Products
+// =========================================================================
+model Item {
+  id             String   @id @default(cuid())
+  sku            String
+  name           String
+  description    String?
+  unit           String   @default("pcs")
+  unitPrice      Float    @default(0)
+  costPrice      Float    @default(0)
+  trackInventory Boolean  @default(true)
+  trackSerial    Boolean  @default(false)
+  trackBatch     Boolean  @default(false)
+  reorderPoint   Float    @default(0)
+  preferredVendorId String?
+  category       String?
+  brand          String?
+  upc            String?
+  ean            String?
+  isbn           String?
+  imageUrl       String?
+  isActive       Boolean  @default(true)
+  isComposite    Boolean  @default(false) // bundle/kit
+  weight         Float?
+  dimensionL     Float?
+  dimensionW     Float?
+  dimensionH     Float?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  stockLevels          StockLevel[]
+  salesOrderItems      SalesOrderItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
+  invoiceItems         InvoiceItem[]
+  billItems            BillItem[]
+  packageItems         PackageItem[]
+  picklistItems        PicklistItem[]
+  compositeItems       CompositeItem[] @relation("CompositeParent")
+  compositeComponents  CompositeItem[] @relation("CompositeChild")
+  adjustmentItems      InventoryAdjustmentItem[]
+  transferItems        TransferOrderItem[]
+  preferredVendor      Contact? @relation(fields: [preferredVendorId], references: [id])
+  priceListItems       PriceListItem[]
+
+  @@unique([organizationId, sku])
+  @@index([organizationId])
+  @@index([sku])
+}
+
+model StockLevel {
+  id          String @id @default(cuid())
+  itemId      String
+  warehouseId String
+  quantity    Float  @default(0)
+  committed   Float  @default(0)  // reserved for sales orders
+  available   Float  @default(0)  // quantity - committed
+  item        Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([itemId, warehouseId])
+  @@index([itemId])
+  @@index([warehouseId])
+}
+
+model CompositeItem {
+  id        String @id @default(cuid())
+  parentId  String
+  childId   String
+  quantity  Float  @default(1)
+  parent    Item @relation("CompositeParent", fields: [parentId], references: [id], onDelete: Cascade)
+  child     Item @relation("CompositeChild",  fields: [childId],  references: [id], onDelete: Cascade)
+
+  @@unique([parentId, childId])
+}
+
+// =========================================================================
+// Contacts (Customers & Vendors)
+// =========================================================================
+model Contact {
+  id             String   @id @default(cuid())
+  type           String   // "customer" | "vendor" | "both"
+  companyName    String?
+  salutation     String?
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  mobile         String?
+  website        String?
+  taxId          String?
+  currencyCode   String?
+  paymentTerms   String?  // "Net 15", "Net 30", "Due on Receipt"
+  notes          String?
+  billingAddressLine1 String?
+  billingAddressLine2 String?
+  billingCity    String?
+  billingState   String?
+  billingZip     String?
+  billingCountry String?
+  shippingAddressLine1 String?
+  shippingAddressLine2 String?
+  shippingCity   String?
+  shippingState  String?
+  shippingZip    String?
+  shippingCountry String?
+  outstandingReceivable Float @default(0)
+  outstandingPayable    Float @default(0)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  salesOrders     SalesOrder[]
+  purchaseOrders  PurchaseOrder[]
+  invoices        Invoice[]
+  bills           Bill[]
+  customerPayments CustomerPayment[]
+  vendorPayments   VendorPayment[]
+  preferredItems  Item[]
+
+  @@index([organizationId])
+  @@index([type])
+}
+
+// =========================================================================
+// Sales Orders
+// =========================================================================
+model SalesOrder {
+  id              String   @id @default(cuid())
+  orderNumber     String
+  reference       String?
+  date            DateTime @default(now())
+  expectedShipmentDate DateTime?
+  shipmentDate    DateTime?
+  customerId      String
+  warehouseId     String?
+  status          String   @default("draft") // draft | confirmed | partially_shipped | shipped | invoiced | cancelled
+  paymentStatus   String   @default("unpaid") // unpaid | partially_paid | paid
+  paymentTerms    String?
+  currencyCode    String   @default("USD")
+  exchangeRate    Float    @default(1)
+  notes           String?
+  termsConditions String?
+  subtotal        Float    @default(0)
+  discount        Float    @default(0)
+  discountType    String   @default("amount") // amount | percent
+  taxAmount       Float    @default(0)
+  shippingCharges Float    @default(0)
+  adjustment      Float    @default(0)
+  total           Float    @default(0)
+  amountPaid      Float    @default(0)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer        Contact     @relation(fields: [customerId], references: [id])
+  warehouse       Warehouse?  @relation(fields: [warehouseId], references: [id])
+  items           SalesOrderItem[]
+  invoices        Invoice[]
+  packages        Package[]
+  picklists       Picklist[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, orderNumber])
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model SalesOrderItem {
+  id          String   @id @default(cuid())
+  salesOrderId String
+  itemId      String
+  name        String   // snapshot
+  sku         String?
+  description String?
+  quantity    Float
+  unitPrice   Float
+  discount    Float    @default(0)
+  taxRate     Float    @default(0)
+  taxAmount   Float    @default(0)
+  total       Float
+  quantityShipped Float @default(0)
+  quantityInvoiced Float @default(0)
+  salesOrder  SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  item        Item       @relation(fields: [itemId], references: [id])
+
+  @@index([salesOrderId])
+}
+
+// =========================================================================
+// Purchase Orders
+// =========================================================================
+model PurchaseOrder {
+  id              String   @id @default(cuid())
+  orderNumber     String
+  reference       String?
+  date            DateTime @default(now())
+  expectedDelivery DateTime?
+  vendorId        String
+  warehouseId     String?
+  status          String   @default("draft") // draft | open | partially_received | received | billed | cancelled
+  paymentStatus   String   @default("unpaid")
+  paymentTerms    String?
+  currencyCode    String   @default("USD")
+  exchangeRate    Float    @default(1)
+  notes           String?
+  termsConditions String?
+  subtotal        Float    @default(0)
+  discount        Float    @default(0)
+  taxAmount       Float    @default(0)
+  shippingCharges Float    @default(0)
+  adjustment      Float    @default(0)
+  total           Float    @default(0)
+  amountPaid      Float    @default(0)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor          Contact     @relation(fields: [vendorId], references: [id])
+  warehouse       Warehouse?  @relation(fields: [warehouseId], references: [id])
+  items           PurchaseOrderItem[]
+  bills           Bill[]
+  receives        PurchaseReceive[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, orderNumber])
+  @@index([organizationId])
+  @@index([vendorId])
+  @@index([status])
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(cuid())
+  purchaseOrderId String
+  itemId          String
+  name            String
+  sku             String?
+  description     String?
+  quantity        Float
+  unitPrice       Float
+  discount        Float    @default(0)
+  taxRate         Float    @default(0)
+  taxAmount       Float    @default(0)
+  total           Float
+  quantityReceived Float @default(0)
+  quantityBilled    Float @default(0)
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  item            Item         @relation(fields: [itemId], references: [id])
+
+  @@index([purchaseOrderId])
+}
+
+model PurchaseReceive {
+  id              String   @id @default(cuid())
+  receiveNumber   String
+  purchaseOrderId String?
+  date            DateTime @default(now())
+  notes           String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  items           PurchaseReceiveItem[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model PurchaseReceiveItem {
+  id                String   @id @default(cuid())
+  receiveId         String
+  itemId            String
+  quantity          Float
+  unitCost          Float
+  receive           PurchaseReceive @relation(fields: [receiveId], references: [id], onDelete: Cascade)
+  @@index([receiveId])
+}
+
+// =========================================================================
+// Invoices
+// =========================================================================
+model Invoice {
+  id              String   @id @default(cuid())
+  invoiceNumber   String
+  reference       String?
+  date            DateTime @default(now())
+  dueDate         DateTime?
+  customerId      String
+  salesOrderId    String?
+  status          String   @default("draft") // draft | sent | viewed | partially_paid | paid | overdue | void
+  paymentStatus   String   @default("unpaid")
+  paymentTerms    String?
+  currencyCode    String   @default("USD")
+  exchangeRate    Float    @default(1)
+  notes           String?
+  termsConditions String?
+  subtotal        Float    @default(0)
+  discount        Float    @default(0)
+  taxAmount       Float    @default(0)
+  shippingCharges Float    @default(0)
+  adjustment      Float    @default(0)
+  total           Float    @default(0)
+  amountPaid      Float    @default(0)
+  balance         Float    @default(0)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer        Contact     @relation(fields: [customerId], references: [id])
+  salesOrder      SalesOrder? @relation(fields: [salesOrderId], references: [id])
+  items           InvoiceItem[]
+  payments        CustomerPayment[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  itemId      String
+  name        String
+  sku         String?
+  description String?
+  quantity    Float
+  unitPrice   Float
+  discount    Float    @default(0)
+  taxRate     Float    @default(0)
+  taxAmount   Float    @default(0)
+  total       Float
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  item        Item     @relation(fields: [itemId], references: [id])
+
+  @@index([invoiceId])
+}
+
+// =========================================================================
+// Bills (Vendor)
+// =========================================================================
+model Bill {
+  id              String   @id @default(cuid())
+  billNumber      String
+  reference       String?
+  date            DateTime @default(now())
+  dueDate         DateTime?
+  vendorId        String
+  purchaseOrderId String?
+  status          String   @default("draft") // draft | open | partially_paid | paid | overdue | void
+  paymentStatus   String   @default("unpaid")
+  paymentTerms    String?
+  currencyCode    String   @default("USD")
+  exchangeRate    Float    @default(1)
+  notes           String?
+  termsConditions String?
+  subtotal        Float    @default(0)
+  discount        Float    @default(0)
+  taxAmount       Float    @default(0)
+  shippingCharges Float    @default(0)
+  adjustment      Float    @default(0)
+  total           Float    @default(0)
+  amountPaid      Float    @default(0)
+  balance         Float    @default(0)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor          Contact     @relation(fields: [vendorId], references: [id])
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  items           BillItem[]
+  payments        VendorPayment[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, billNumber])
+  @@index([organizationId])
+  @@index([vendorId])
+}
+
+model BillItem {
+  id          String   @id @default(cuid())
+  billId      String
+  itemId      String
+  name        String
+  sku         String?
+  description String?
+  quantity    Float
+  unitPrice   Float
+  discount    Float    @default(0)
+  taxRate     Float    @default(0)
+  taxAmount   Float    @default(0)
+  total       Float
+  bill        Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  item        Item @relation(fields: [itemId], references: [id])
+
+  @@index([billId])
+}
+
+// =========================================================================
+// Payments
+// =========================================================================
+model CustomerPayment {
+  id              String   @id @default(cuid())
+  paymentNumber   String
+  date            DateTime @default(now())
+  customerId      String
+  invoiceId       String?
+  amount          Float
+  currencyCode    String   @default("USD")
+  exchangeRate    Float    @default(1)
+  paymentMode     String   @default("cash") // cash | check | bank_transfer | card | other
+  reference       String?
+  notes           String?
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer        Contact     @relation(fields: [customerId], references: [id])
+  invoice         Invoice?    @relation(fields: [invoiceId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, paymentNumber])
+  @@index([organizationId])
+  @@index([customerId])
+}
+
+model VendorPayment {
+  id              String   @id @default(cuid())
+  paymentNumber   String
+  date            DateTime @default(now())
+  vendorId        String
+  billId          String?
+  amount          Float
+  currencyCode    String   @default("USD")
+  exchangeRate    Float    @default(1)
+  paymentMode     String   @default("cash")
+  reference       String?
+  notes           String?
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor          Contact     @relation(fields: [vendorId], references: [id])
+  bill            Bill?       @relation(fields: [billId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, paymentNumber])
+  @@index([organizationId])
+  @@index([vendorId])
+}
+
+// =========================================================================
+// Packages & Shipments
+// =========================================================================
+model Package {
+  id              String   @id @default(cuid())
+  packageNumber   String
+  date            DateTime @default(now())
+  salesOrderId    String?
+  status          String   @default("draft") // draft | packed | shipped | delivered
+  trackingNumber  String?
+  carrier         String?
+  weight          Float?
+  dimensionL      Float?
+  dimensionW      Float?
+  dimensionH      Float?
+  notes           String?
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesOrder      SalesOrder? @relation(fields: [salesOrderId], references: [id])
+  items           PackageItem[]
+  shipment        Shipment?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, packageNumber])
+  @@index([organizationId])
+}
+
+model PackageItem {
+  id        String   @id @default(cuid())
+  packageId String
+  itemId    String
+  quantity  Float
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  item      Item    @relation(fields: [itemId], references: [id])
+
+  @@index([packageId])
+}
+
+model Shipment {
+  id              String   @id @default(cuid())
+  shipmentNumber  String
+  date            DateTime @default(now())
+  packageId       String?  @unique
+  carrier         String
+  trackingNumber  String?
+  status          String   @default("pending") // pending | in_transit | delivered | returned
+  shippedDate     DateTime?
+  deliveryDate    DateTime?
+  shippingCharges Float    @default(0)
+  notes           String?
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  package         Package?    @relation(fields: [packageId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, shipmentNumber])
+  @@index([organizationId])
+}
+
+// =========================================================================
+// Picklists
+// =========================================================================
+model Picklist {
+  id              String   @id @default(cuid())
+  picklistNumber  String
+  date            DateTime @default(now())
+  salesOrderId    String?
+  warehouseId     String?
+  status          String   @default("draft") // draft | assigned | picked | packed | cancelled
+  assigneeName    String?
+  notes           String?
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesOrder      SalesOrder?  @relation(fields: [salesOrderId], references: [id])
+  warehouse       Warehouse?   @relation(fields: [warehouseId], references: [id])
+  items           PicklistItem[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, picklistNumber])
+  @@index([organizationId])
+}
+
+model PicklistItem {
+  id          String   @id @default(cuid())
+  picklistId  String
+  itemId      String
+  quantity    Float
+  picked      Boolean  @default(false)
+  pickedQty   Float    @default(0)
+  picklist    Picklist @relation(fields: [picklistId], references: [id], onDelete: Cascade)
+  item        Item     @relation(fields: [itemId], references: [id])
+
+  @@index([picklistId])
+}
+
+// =========================================================================
+// Inventory Adjustments
+// =========================================================================
+model InventoryAdjustment {
+  id              String   @id @default(cuid())
+  adjustmentNumber String
+  date            DateTime @default(now())
+  reason          String?
+  warehouseId     String?
+  status          String   @default("draft") // draft | approved | cancelled
+  notes           String?
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  warehouse       Warehouse?  @relation(fields: [warehouseId], references: [id])
+  items           InventoryAdjustmentItem[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, adjustmentNumber])
+  @@index([organizationId])
+}
+
+model InventoryAdjustmentItem {
+  id           String   @id @default(cuid())
+  adjustmentId String
+  itemId       String
+  quantity     Float    // positive = increase, negative = decrease
+  reason       String?
+  adjustment   InventoryAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+  item         Item     @relation(fields: [itemId], references: [id])
+
+  @@index([adjustmentId])
+}
+
+// =========================================================================
+// Transfer Orders
+// =========================================================================
+model TransferOrder {
+  id              String   @id @default(cuid())
+  transferNumber  String
+  date            DateTime @default(now())
+  fromWarehouseId String
+  toWarehouseId   String
+  status          String   @default("draft") // draft | in_transit | received | cancelled
+  notes           String?
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fromWarehouse   Warehouse @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse     Warehouse @relation("TransferTo",   fields: [toWarehouseId],   references: [id])
+  items           TransferOrderItem[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, transferNumber])
+  @@index([organizationId])
+}
+
+model TransferOrderItem {
+  id              String   @id @default(cuid())
+  transferOrderId String
+  itemId          String
+  quantity        Float
+  transferOrder   TransferOrder @relation(fields: [transferOrderId], references: [id], onDelete: Cascade)
+  item            Item         @relation(fields: [itemId], references: [id])
+
+  @@index([transferOrderId])
+}
+
+// =========================================================================
+// Settings: Taxes, Price Lists
+// =========================================================================
+model Tax {
+  id             String   @id @default(cuid())
+  name           String
+  rate           Float
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+model PriceList {
+  id             String   @id @default(cuid())
+  name           String
+  currencyCode   String   @default("USD")
+  isDefault      Boolean  @default(false)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items          PriceListItem[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model PriceListItem {
+  id          String   @id @default(cuid())
+  priceListId String
+  itemId      String
+  unitPrice   Float
+  priceList   PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  item        Item      @relation(fields: [itemId], references: [id])
+
+  @@unique([priceListId, itemId])
+}
